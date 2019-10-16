@@ -67,20 +67,7 @@ func (e *elasticLogger) LogWrite(when time.Time, msgText interface{}, level int)
 		}
 	}
 
-	go func() {
-
-		now := time.Now().UnixNano()
-		dateTime := strconv.FormatInt(now, 10)
-		req := esapi.IndexRequest{
-			Index:      e.Index,
-			DocumentID: dateTime,
-			Body:       strings.NewReader(msg),
-			Refresh:    "true",
-		}
-		res, _ := req.Do(context.Background(), e.Es)
-		res.Body.Close()
-	}()
-
+	go e.saveMessage(msg)
 	return nil
 }
 
@@ -96,6 +83,23 @@ func (e *elasticLogger) connectElastic() (err error) {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Get elastic client error %v", err))
 	}
+	return nil
+}
+
+// saveMessage 存储日志到服务器
+func (e *elasticLogger) saveMessage(msg string) error {
+	dateTime := strconv.FormatInt(time.Now().UnixNano(), 10)
+	req := esapi.IndexRequest{
+		Index:      e.Index,
+		DocumentID: dateTime,
+		Body:       strings.NewReader(msg),
+		Refresh:    "true",
+	}
+	res, err := req.Do(context.Background(), e.Es)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
 	return nil
 }
 
