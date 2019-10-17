@@ -23,6 +23,22 @@ type elasticLogger struct {
 	Mu       sync.RWMutex
 }
 
+type MsgBody struct {
+	Time    string `json:"time"`
+	Level   string `json:"level"`
+	Path    string `json:"path"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+type ElasticLogBody struct {
+	Level     string    `json:"level"`
+	Path      string    `json:"path"`
+	Name      string    `json:"name"`
+	Content   string    `json:"content"`
+	TimeStamp time.Time `json:"timestamp"`
+}
+
 // Init 初始化
 func (e *elasticLogger) Init(jsonConfig string) error {
 	if len(jsonConfig) == 0 {
@@ -67,7 +83,27 @@ func (e *elasticLogger) LogWrite(when time.Time, msgText interface{}, level int)
 		}
 	}
 
-	go e.saveMessage(msg)
+	body := new(MsgBody)
+	err := json.Unmarshal([]byte(msg), &body)
+	if err != nil {
+		return err
+	}
+
+	esBody := new(ElasticLogBody)
+	esBody.Name = body.Name
+	esBody.Level = body.Level
+	esBody.Content = body.Content
+	esBody.Path = body.Path
+
+	// 必须转换为时间格式，否则es不支持
+	timeTemplate := "2006-01-02 15:04:05"
+	stamp, err := time.ParseInLocation(timeTemplate, body.Time, time.Local)
+	if err != nil {
+		return err
+	}
+	esBody.TimeStamp = stamp.UTC()
+	esByte, _ := json.Marshal(esBody)
+	go e.saveMessage(string(esByte))
 	return nil
 }
 
